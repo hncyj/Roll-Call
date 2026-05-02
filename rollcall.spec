@@ -47,7 +47,6 @@ a = Analysis(
         'tkinter',
         'unittest',
         'email',
-        'html',
         'http',
         'xmlrpc',
         'IPython',

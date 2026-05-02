@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build on Windows
 
 on:
   push:
@@ -27,6 +27,18 @@ jobs:
 
       - name: Build EXE
         run: pyinstaller rollcall.spec
+
+      - name: Smoke test EXE
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "dist\随机点名.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($proc.HasExited) {
+            Write-Error "EXE crashed on startup (exit code $($proc.ExitCode))"
+            exit 1
+          }
+          $proc.Kill()
+          Write-Host "Smoke test passed"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
