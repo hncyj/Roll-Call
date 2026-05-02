@@ -45,9 +45,6 @@ a = Analysis(
     excludes=[
         # 排除不需要的大型库，减小体积
         'tkinter',
-        'unittest',
-        'email',
-        'http',
         'xmlrpc',
         'IPython',
         'jupyter',
