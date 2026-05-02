@@ -33,6 +33,11 @@ a = Analysis(
         # openpyxl 需要的 lxml/et_xmlfile
         'openpyxl',
         *collect_submodules('openpyxl'),
+        # matplotlib.colors 运行时依赖 Pillow
+        'PIL',
+        *collect_submodules('PIL'),
+        # qdarktheme 内部动态导入
+        *collect_submodules('qdarktheme'),
     ],
     hookspath=[],
     hooksconfig={},
@@ -50,7 +55,6 @@ a = Analysis(
         'notebook',
         'scipy',
         'pandas',
-        'PIL',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
