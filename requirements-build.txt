@@ -1,0 +1,3 @@
+# 打包专用依赖，由 GitHub Actions (windows-latest) 安装
+-r requirements.txt
+pyinstaller>=6.0

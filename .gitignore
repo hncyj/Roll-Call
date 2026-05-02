@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# 学生名单（含个人信息，不提交到远端）
+assets/*.xlsx
+assets/*.xls
+
+# 开发数据
+*.db
+*.sqlite
