@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import openpyxl
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
@@ -9,8 +10,11 @@ from PyQt5.QtWidgets import (
 
 from app.data.models import ClassData, Student
 from app.data.repository import Repository
+from app.logic.students import edit_student, validate_students
 
 class StudentsTab(QWidget):
+    students_changed = pyqtSignal()
+
     def __init__(self, class_data: ClassData, repo: Repository, parent=None):
         super().__init__(parent)
         self._class_data = class_data
@@ -59,23 +63,31 @@ class StudentsTab(QWidget):
         if not path:
             return
         try:
-            wb = openpyxl.load_workbook(path)
-            ws = wb.active
-            students = []
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                if row[0] is None or row[1] is None:
-                    continue
-                sid = str(row[0]).strip()
-                name = str(row[1]).strip()
-                if sid and name:
-                    students.append(Student(id=sid, name=name))
+            wb = openpyxl.load_workbook(path, read_only=True)
+            try:
+                ws = wb.active
+                students = []
+                for number, row in enumerate(ws.iter_rows(min_row=2, max_col=2, values_only=True), 2):
+                    if row[0] is None and row[1] is None:
+                        continue
+                    if row[0] is None or row[1] is None:
+                        raise ValueError(f"第 {number} 行缺少学号或姓名。")
+                    students.append(Student(id=str(row[0]).strip(), name=str(row[1]).strip()))
+            finally:
+                wb.close()
             if not 1 <= len(students) <= 200:
                 QMessageBox.warning(self, "错误", "学生人数必须在 1-200 人之间。")
                 return
-            self._class_data.students = students
-            self._class_data.called_ids.clear()
-            self._repo.save()
+            validate_students(students)
+            if self._class_data.students and QMessageBox.question(
+                self, "替换名单", "将替换当前学生名单，历史评分和本轮已点名状态保留。是否继续？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            ) != QMessageBox.Yes:
+                return
+            with self._repo.edit_class(self._class_data):
+                self._class_data.students = students
             self._refresh()
+            self.students_changed.emit()
             QMessageBox.information(self, "成功", f"成功导入 {len(students)} 名学生。")
         except Exception as e:
             QMessageBox.critical(self, "导入失败", str(e))
@@ -87,9 +99,16 @@ class StudentsTab(QWidget):
         name, ok2 = QInputDialog.getText(self, "添加学生", "姓名：")
         if not ok2 or not name.strip():
             return
-        self._class_data.students.append(Student(id=sid.strip(), name=name.strip()))
-        self._repo.save()
+        try:
+            students = self._class_data.students + [Student(id=sid.strip(), name=name.strip())]
+            validate_students(students)
+            with self._repo.edit_class(self._class_data):
+                self._class_data.students = students
+        except Exception as e:
+            QMessageBox.warning(self, "添加失败", str(e))
+            return
         self._refresh()
+        self.students_changed.emit()
 
     def _edit_student(self):
         row = self._table.currentRow()
@@ -103,10 +122,14 @@ class StudentsTab(QWidget):
         name, ok2 = QInputDialog.getText(self, "修改学生", "姓名：", text=s.name)
         if not ok2:
             return
-        s.id = sid.strip()
-        s.name = name.strip()
-        self._repo.save()
+        try:
+            with self._repo.edit_class(self._class_data):
+                edit_student(self._class_data, s, sid, name)
+        except Exception as e:
+            QMessageBox.warning(self, "修改失败", str(e))
+            return
         self._refresh()
+        self.students_changed.emit()
 
     def _delete_student(self):
         row = self._table.currentRow()
@@ -120,6 +143,11 @@ class StudentsTab(QWidget):
         )
         if reply != QMessageBox.Yes:
             return
-        del self._class_data.students[row]
-        self._repo.save()
+        try:
+            with self._repo.edit_class(self._class_data):
+                del self._class_data.students[row]
+        except Exception as e:
+            QMessageBox.critical(self, "删除失败", str(e))
+            return
         self._refresh()
+        self.students_changed.emit()

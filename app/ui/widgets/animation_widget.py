@@ -32,6 +32,8 @@ class AnimationWidget(QWidget):
         self._timer.start(self._INTERVALS[0])
 
     def _tick(self) -> None:
+        if self._target is None:
+            return
         self._step += 1
         if self._step >= len(self._INTERVALS):
             self._timer.stop()
@@ -43,6 +45,12 @@ class AnimationWidget(QWidget):
 
     def set_text(self, text: str) -> None:
         self._label.setText(text)
+
+    def cancel(self) -> None:
+        self._timer.stop()
+        self._target = None
+        self._names = []
+        self._label.setText("--")
 
     @property
     def is_animating(self) -> bool:

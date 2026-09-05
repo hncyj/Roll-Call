@@ -19,3 +19,11 @@ assets/*.xls
 # 开发数据
 *.db
 *.sqlite
+
+# 本地名单、评分、轮次和路径设置
+rollcall_data*.json
+rollcall_settings.json
+*.v1.bak.json
+*.tmp
+rollcall.lock
+.pytest_cache/

@@ -2,20 +2,20 @@ import pytest
 from app.data.models import Student, Record, ClassData, AppData
 
 
-def test_student_defaults():
+def test_student_fields():
     s = Student(id="001", name="张三")
-    assert s.status == "normal"
+    assert s.to_dict() == {"id": "001", "name": "张三"}
 
 
 def test_student_round_trip():
-    s = Student(id="001", name="张三", status="absent")
+    s = Student(id="001", name="张三")
     assert Student.from_dict(s.to_dict()) == s
 
 
 def test_student_from_dict_coerces_int_id():
     s = Student.from_dict({"id": 2541123101, "name": "曾璟宁"})
     assert s.id == "2541123101"
-    assert s.status == "normal"
+    assert s.name == "曾璟宁"
 
 
 def test_record_round_trip():

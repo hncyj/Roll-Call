@@ -3,7 +3,7 @@
 # 打包命令（在 Windows 上执行，或通过 GitHub Actions 自动构建）：
 #   pyinstaller rollcall.spec
 #
-# 目标平台：Windows 10+，Python 3.12
+# 目标平台：Windows 10/11，Python 3.11
 
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -19,12 +19,8 @@ a = Analysis(
         ('assets/icon.ico', 'assets'),
         # qdarktheme 的样式资源
         *collect_data_files('qdarktheme'),
-        # matplotlib 的字体和样式数据
-        *collect_data_files('matplotlib'),
     ],
     hiddenimports=[
-        # matplotlib Qt5 后端
-        'matplotlib.backends.backend_qt5agg',
         # PyQt5 核心模块
         'PyQt5.QtCore',
         'PyQt5.QtGui',
@@ -33,9 +29,6 @@ a = Analysis(
         # openpyxl 需要的 lxml/et_xmlfile
         'openpyxl',
         *collect_submodules('openpyxl'),
-        # matplotlib.colors 运行时依赖 Pillow
-        'PIL',
-        *collect_submodules('PIL'),
         # qdarktheme 内部动态导入
         *collect_submodules('qdarktheme'),
     ],

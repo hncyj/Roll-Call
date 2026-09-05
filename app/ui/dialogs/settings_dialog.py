@@ -16,6 +16,9 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(480)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("数据文件路径："))
+        hint = QLabel("选择新文件：复制当前数据并记住新路径。\n选择已有文件：打开其中的数据，不覆盖文件。\n重启后继续使用此路径；外部存储设备需保持连接。")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
 
         path_row = QHBoxLayout()
         self._edit = QLineEdit(current_path)
@@ -35,7 +38,8 @@ class SettingsDialog(QDialog):
 
     def _browse(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "选择数据文件位置", self._edit.text(), "JSON Files (*.json)"
+            self, "选择数据文件位置", self._edit.text(), "JSON Files (*.json)",
+            options=QFileDialog.DontConfirmOverwrite,
         )
         if path:
             self._edit.setText(path)

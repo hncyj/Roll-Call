@@ -1,3 +1,5 @@
+> 历史方案存档：本文记录 2026-05-02 的设计或实施计划，不是当前验收标准。当前功能、点名轮次和数据路径规则请以 [README](../../../README.md) 及现有代码为准。缺席 / 请假与独立图表页不属于当前功能。
+
 # 随机点名系统 重构 & 功能扩展 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

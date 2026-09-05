@@ -1,8 +1,9 @@
 from __future__ import annotations
 import datetime
+import re
 
 import openpyxl
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QFileDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
     QPushButton, QSplitter, QTableWidget, QTableWidgetItem,
@@ -15,6 +16,8 @@ from app.logic.statistics import calc_class_stats
 
 
 class RecordsTab(QWidget):
+    records_changed = pyqtSignal()
+
     def __init__(self, class_data: ClassData, repo: Repository, parent=None):
         super().__init__(parent)
         self._class_data = class_data
@@ -36,7 +39,7 @@ class RecordsTab(QWidget):
         stats_layout.setContentsMargins(0, 4, 0, 0)
         stats_layout.addWidget(QLabel("学生统计"))
         self._stats_table = QTableWidget(0, 4)
-        self._stats_table.setHorizontalHeaderLabels(["学号", "姓名", "点名次数", "平均分"])
+        self._stats_table.setHorizontalHeaderLabels(["学号", "姓名", "评分次数", "平均分"])
         self._stats_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._stats_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._stats_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -101,18 +104,27 @@ class RecordsTab(QWidget):
             QMessageBox.warning(self, "提示", "请先选中一条历史记录。")
             return
         real_idx = len(self._class_data.records) - 1 - row
-        del self._class_data.records[real_idx]
-        self._repo.save()
+        try:
+            with self._repo.edit_class(self._class_data):
+                del self._class_data.records[real_idx]
+        except Exception as e:
+            QMessageBox.critical(self, "删除失败", str(e))
+            return
         self._refresh()
+        self.records_changed.emit()
 
     def _export_single(self):
         default_name = f"{self._class_data.name}成绩单_{datetime.date.today()}.xlsx"
         path, _ = QFileDialog.getSaveFileName(self, "导出成绩单", default_name, "Excel Files (*.xlsx)")
         if not path:
             return
-        wb = openpyxl.Workbook()
-        self._write_class_sheet(wb.active, self._class_data.name, self._class_data.students, self._class_data.records)
-        wb.save(path)
+        try:
+            wb = openpyxl.Workbook()
+            self._write_class_sheet(wb.active, self._class_data.name, self._class_data.students, self._class_data.records)
+            wb.save(path)
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", str(e))
+            return
         QMessageBox.information(self, "成功", "成绩单已导出。")
 
     def _export_all(self):
@@ -120,19 +132,30 @@ class RecordsTab(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, "导出全部班级", default_name, "Excel Files (*.xlsx)")
         if not path:
             return
-        wb = openpyxl.Workbook()
-        wb.remove(wb.active)
-        all_classes = self._repo.data.classes if self._repo.data else []
-        for cls in all_classes:
-            ws = wb.create_sheet(title=cls.name[:31])
-            self._write_class_sheet(ws, cls.name, cls.students, cls.records)
-        wb.save(path)
+        try:
+            wb = openpyxl.Workbook()
+            all_classes = self._repo.data.classes if self._repo.data else []
+            for index, cls in enumerate(all_classes):
+                ws = wb.active if index == 0 else wb.create_sheet()
+                self._write_class_sheet(ws, cls.name, cls.students, cls.records)
+            wb.save(path)
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", str(e))
+            return
         QMessageBox.information(self, "成功", "全部班级成绩单已导出。")
 
     @staticmethod
     def _write_class_sheet(ws, class_name: str, students, records) -> None:
-        ws.title = class_name[:31]
-        ws.append(["学号", "姓名", "点名次数", "平均分"])
+        title = re.sub(r'[\\/*?:\[\]]', '_', class_name).strip("'")[:31] or "班级"
+        existing = {s.title.lower() for s in ws.parent.worksheets if s is not ws}
+        base = title
+        suffix = 1
+        while title.lower() in existing:
+            tail = f"_{suffix}"
+            title = base[:31 - len(tail)] + tail
+            suffix += 1
+        ws.title = title
+        ws.append(["学号", "姓名", "评分次数", "平均分"])
         stats_by_id = {s["student_id"]: s for s in calc_class_stats(records)}
         for student in students:
             s = stats_by_id.get(student.id)

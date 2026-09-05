@@ -19,3 +19,4 @@ def resource_path(rel: str) -> str:
 
 
 DEFAULT_DATA_FILENAME = "rollcall_data.json"
+SETTINGS_FILENAME = "rollcall_settings.json"
