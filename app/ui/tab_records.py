@@ -3,6 +3,8 @@ import datetime
 import re
 
 import openpyxl
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QFileDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
@@ -155,11 +157,22 @@ class RecordsTab(QWidget):
             title = base[:31 - len(tail)] + tail
             suffix += 1
         ws.title = title
-        ws.append(["学号", "姓名", "评分次数", "平均分"])
         stats_by_id = {s["student_id"]: s for s in calc_class_stats(records)}
+        scores_by_id = {}
+        for record in sorted(records, key=lambda r: r.time):
+            scores_by_id.setdefault(record.student_id, []).append(record.score)
+        max_count = max((len(scores_by_id.get(student.id, [])) for student in students), default=0)
+        score_headers = [f"第 {i} 次评分" for i in range(1, max_count + 1)]
+        ws.append(["学号", "姓名", "评分次数", *score_headers, "平均分"])
         for student in students:
             s = stats_by_id.get(student.id)
-            if s:
-                ws.append([student.id, student.name, s["count"], s["avg_score"]])
-            else:
-                ws.append([student.id, student.name, 0, "-"])
+            scores = scores_by_id.get(student.id, [])
+            padding = [None] * (max_count - len(scores))
+            ws.append([student.id, student.name, len(scores), *scores, *padding, s["avg_score"] if s else "-"])
+            ws.cell(ws.max_row, ws.max_column).number_format = "0.0"
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        for column in range(1, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(column)].width = 18 if column <= 2 else 14
+        ws.freeze_panes = "D2"
+        ws.auto_filter.ref = ws.dimensions

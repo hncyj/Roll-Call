@@ -245,3 +245,130 @@ def test_export_handles_invalid_and_duplicate_long_class_names(tmp_path):
     restored = openpyxl.load_workbook(path)
     assert restored.worksheets[0]["A2"].value == "001"
     restored.close()
+
+
+@pytest.mark.parametrize("mode", ["random", "manual"])
+def test_skip_reopens_only_current_student_and_survives_restart(window, monkeypatch, mode):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    tab._save_record()
+    window._data.classes[1].called_ids = ["001"]
+    target = tab._class_data.students[1]
+    if mode == "random":
+        monkeypatch.setattr(tab._engine, "pick_random", lambda: target)
+        tab._random_roll()
+        finish_roll(tab)
+    else:
+        tab._student_list.setCurrentRow(1)
+        tab._manual_roll()
+    assert tab._skip_btn.isEnabled()
+    tab._skip_btn.click()
+    assert tab._selected_student is None
+    assert not tab._skip_btn.isEnabled()
+    assert not tab._save_btn.isEnabled()
+    assert tab._class_data.called_ids == ["001"]
+    assert [s.id for s in tab._engine.get_uncalled()] == ["002", "003"]
+    assert len(tab._class_data.records) == 1
+    assert tab._class_data.records[0].student_id == "001"
+    assert tab._status_panel._called_label.text() == "本轮已点名（1）"
+    assert "本轮已点" not in tab._student_list.item(1).text()
+    saved = Repository(window._repo.data_path).load()
+    assert saved.classes[0].called_ids == ["001"]
+    assert saved.classes[1].called_ids == ["001"]
+    assert len(saved.classes[0].records) == 1
+    tab._save_record()
+    assert len(tab._class_data.records) == 1
+
+
+def test_skipped_student_can_be_drawn_immediately_and_then_scored(window):
+    tab = window._roll_call_tab
+    window._class_combo.setCurrentIndex(1)  # Only one student in this class.
+    tab._random_roll()
+    finish_roll(tab)
+    sid = tab._selected_student.id
+    tab._skip_current()
+    assert tab._class_data.records == []
+    tab._random_roll()
+    finish_roll(tab)
+    assert tab._selected_student.id == sid
+    tab._save_record()
+    saved = Repository(window._repo.data_path).load().classes[1]
+    assert saved.called_ids == [sid]
+    assert len(saved.records) == 1
+
+
+def test_failed_skip_keeps_selection_and_disk_state_then_allows_retry(window, monkeypatch, messages):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    original_save = window._repo.save
+    def fail():
+        raise OSError("disk full")
+    monkeypatch.setattr(window._repo, "save", fail)
+    tab._skip_current()
+    assert tab._class_data.called_ids == ["001"]
+    assert tab._selected_student.id == "001"
+    assert tab._skip_btn.isEnabled()
+    assert tab._save_btn.isEnabled()
+    assert Repository(window._repo.data_path).load().classes[0].called_ids == ["001"]
+    assert messages[-1][1] == "跳过失败"
+    monkeypatch.setattr(window._repo, "save", original_save)
+    tab._skip_current()
+    assert tab._class_data.called_ids == []
+    assert tab._selected_student is None
+    assert Repository(window._repo.data_path).load().classes[0].called_ids == []
+
+
+def test_saved_score_cannot_be_undone_by_skip(window):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    tab._save_record()
+    assert not tab._skip_btn.isEnabled()
+    tab._skip_current()
+    assert tab._class_data.called_ids == ["001"]
+    assert len(tab._class_data.records) == 1
+
+
+def test_skip_during_next_animation_cannot_undo_previous_result(window):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    tab._random_roll()
+    assert not tab._skip_btn.isEnabled()
+    tab._skip_current()
+    assert tab._class_data.called_ids == ["001"]
+    finish_roll(tab)
+    tab._skip_current()
+    assert tab._class_data.called_ids == ["001"]
+
+
+def test_class_switch_clears_skip_action_without_reopening_previous_student(window):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    window._class_combo.setCurrentIndex(1)
+    assert not tab._skip_btn.isEnabled()
+    tab._skip_current()
+    assert window._data.classes[0].called_ids == ["001"]
+    assert window._data.classes[1].called_ids == []
+    window._class_combo.setCurrentIndex(0)
+    assert not tab._skip_btn.isEnabled()
+
+
+def test_skip_preserves_previous_round_scores_and_export(window):
+    tab = window._roll_call_tab
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    tab._score_spin.setValue(83)
+    tab._save_record()
+    tab._reset_called(confirmed=True)
+    tab._student_list.setCurrentRow(0)
+    tab._manual_roll()
+    tab._skip_current()
+    assert tab._class_data.called_ids == []
+    assert len(tab._class_data.records) == 1
+    wb = openpyxl.Workbook()
+    RecordsTab._write_class_sheet(wb.active, "A", tab._class_data.students, tab._class_data.records)
+    assert list(wb.active.values)[1] == ("001", "Alice", 1, 83, 83)

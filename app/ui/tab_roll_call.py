@@ -39,6 +39,7 @@ class RollCallTab(QWidget):
         self._manual_btn.setEnabled(True)
         self._reset_btn.setEnabled(True)
         self._save_btn.setEnabled(False)
+        self._skip_btn.setEnabled(False)
 
     def _init_ui(self):
         root = QHBoxLayout(self)
@@ -71,7 +72,16 @@ class RollCallTab(QWidget):
         score_row.addWidget(self._save_btn)
         score_row.addStretch()
         left.addLayout(score_row)
-        left.addWidget(QLabel("点名完成即保存本轮状态；评分需点击“保存本次记录”。"))
+        skip_row = QHBoxLayout()
+        self._skip_btn = QPushButton("跳过本次（本轮可再抽）")
+        self._skip_btn.setEnabled(False)
+        self._skip_btn.clicked.connect(self._skip_current)
+        skip_row.addWidget(self._skip_btn)
+        skip_row.addStretch()
+        left.addLayout(skip_row)
+        hint = QLabel("点名完成即保存本轮状态；评分需单独保存。\n如需本轮后续再抽到该学生，请在评分前点击“跳过本次”。")
+        hint.setWordWrap(True)
+        left.addWidget(hint)
 
         left.addWidget(QLabel("学生名单（手动点名用）："))
         self._student_list = QListWidget()
@@ -114,6 +124,7 @@ class RollCallTab(QWidget):
             return
         self._selected_student = None
         self._save_btn.setEnabled(False)
+        self._skip_btn.setEnabled(False)
         names = [s.name for s in self._engine.get_uncalled()]
         self._random_btn.setEnabled(False)
         self._manual_btn.setEnabled(False)
@@ -142,6 +153,7 @@ class RollCallTab(QWidget):
         self._selected_student = student
         self._animation.set_text(student.name)
         self._save_btn.setEnabled(True)
+        self._skip_btn.setEnabled(True)
         self._refresh()
 
     def _manual_roll(self):
@@ -173,8 +185,23 @@ class RollCallTab(QWidget):
             return
         self._selected_student = None
         self._save_btn.setEnabled(False)
+        self._skip_btn.setEnabled(False)
         self._refresh()
         QMessageBox.information(self, "成功", "记录已保存。")
+
+    def _skip_current(self):
+        if self._animation.is_animating or self._selected_student is None:
+            return
+        student = self._selected_student
+        try:
+            with self._repo.edit_class(self._class_data):
+                self._engine.unmark_called(student.id)
+        except Exception as e:
+            QMessageBox.critical(self, "跳过失败", f"仍保留本次点名，可重试：\n{e}")
+            return
+        self.cancel_selection()
+        self._animation.set_text(f"{student.name}（已跳过）")
+        self._refresh()
 
     def _reset_called(self, checked=False, *, confirmed=False):
         if self._animation.is_animating:

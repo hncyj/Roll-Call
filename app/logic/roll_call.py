@@ -27,6 +27,9 @@ class RollCallEngine:
         if student_id not in self._class_data.called_ids:
             self._class_data.called_ids.append(student_id)
 
+    def unmark_called(self, student_id: str) -> None:
+        self._class_data.called_ids[:] = [sid for sid in self._class_data.called_ids if sid != student_id]
+
     def reset(self) -> None:
         self._class_data.called_ids.clear()
 
